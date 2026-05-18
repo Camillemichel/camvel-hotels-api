@@ -29,9 +29,10 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey }) 
   const results = r.data?.properties || r.data?.hotels_results || [];
 
   return results.slice(0, 8).map(h => {
-    const price    = h.rate_per_night?.lowest || h.price || null;
-    const priceNum = price ? parseInt(String(price).replace(/[^\d]/g, "")) : null;
-    const nights   = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
+    const nights      = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
+    // Utilise extracted_lowest pour les vrais prix numériques SerpApi
+    const perNight    = h.rate_per_night?.extracted_lowest || parseInt(String(h.rate_per_night?.lowest || "").replace(/[^\d]/g, "")) || null;
+    const totalExact  = h.total_rate?.extracted_lowest || (perNight ? perNight * nights : null);
 
     return {
       name    : h.name,
@@ -39,10 +40,15 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey }) 
       score   : h.overall_rating ? `${h.overall_rating}/5` : null,
       reviews : h.reviews || 0,
       address : h.description || h.location || city,
-      perNight: priceNum || null,
-      price   : priceNum ? `${priceNum}€/nuit` : "Voir les prix",
-      total   : priceNum ? priceNum * nights : null,
-      bookUrl : `https://www.google.com/travel/hotels?q=${encodeURIComponent(h.name + " " + city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}&hl=fr`,
+      perNight,
+      price   : perNight ? `À partir de ${perNight}€/nuit` : "Voir les prix",
+      total   : totalExact ? Math.round(totalExact) : null,
+      bookUrl : (() => {
+        // Format Google Hotels avec dates : dates=YYYYMMDD,YYYYMMDD (sans tirets)
+        const d1 = checkin.replace(/-/g, "");
+        const d2 = checkout.replace(/-/g, "");
+        return `https://www.google.com/travel/hotels?q=${encodeURIComponent(h.name + " " + city)}&dates=${d1},${d2}&adults=${adults}&hl=fr`;
+      })(),
     };
   });
 }
