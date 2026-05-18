@@ -14,10 +14,16 @@ app.get("/hotels", async (req, res) => {
     return res.status(400).json({ error: "city, checkin et checkout sont requis" });
   }
 
-  const apiKey = req.query.key || process.env.SERPAPI_KEY || "";
+  const apiKey     = req.query.key || process.env.SERPAPI_KEY || "";
+  const maxPrice   = req.query.maxPrice   ? parseInt(req.query.maxPrice)   : null;
+  const minStars   = req.query.minStars   ? parseInt(req.query.minStars)   : null;
+  const maxStars   = req.query.maxStars   ? parseInt(req.query.maxStars)   : null;
+  const travelType  = req.query.travelType  || "";
+  const accomType   = req.query.accomType   || "hotel";
+  const requests    = req.query.requests    || "";
 
   try {
-    const hotels = await searchHotels({ city, checkin, checkout, adults: parseInt(adults), apiKey });
+    const hotels = await searchHotels({ city, checkin, checkout, adults: parseInt(adults), apiKey, maxPrice, minStars, maxStars, travelType, accomType, requests });
     res.json({ hotels, count: hotels.length });
   } catch (e) {
     console.error("Search error:", e.message);
