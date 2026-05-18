@@ -25,5 +25,35 @@ app.get("/hotels", async (req, res) => {
 
 app.get("/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+// Debug : teste chaque étape et retourne les erreurs détaillées
+app.get("/debug", async (req, res) => {
+  const city = req.query.city || "Paris";
+  const steps = {};
+
+  // Étape 1 : Nominatim
+  try {
+    const axios = require("axios");
+    const r = await axios.get("https://nominatim.openstreetmap.org/search", {
+      params: { q: city, format: "json", limit: 1 },
+      headers: { "User-Agent": "CamVelApp/1.0" },
+      timeout: 8000,
+    });
+    steps.nominatim = { ok: true, lat: r.data?.[0]?.lat, lon: r.data?.[0]?.lon };
+  } catch(e) { steps.nominatim = { ok: false, error: e.message }; }
+
+  // Étape 2 : Overpass
+  if (steps.nominatim.ok) {
+    try {
+      const axios = require("axios");
+      const { lat, lon } = steps.nominatim;
+      const q = `[out:json][timeout:10];(node["tourism"="hotel"](around:3000,${lat},${lon}););out tags 5;`;
+      const r = await axios.get(`https://overpass.kumi.systems/api/interpreter?data=${encodeURIComponent(q)}`, { timeout: 15000 });
+      steps.overpass = { ok: true, count: r.data?.elements?.length, sample: r.data?.elements?.[0]?.tags?.name };
+    } catch(e) { steps.overpass = { ok: false, error: e.message, status: e.response?.status }; }
+  }
+
+  res.json(steps);
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ API hôtels prête sur le port ${PORT}`));
