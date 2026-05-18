@@ -40,11 +40,21 @@ async function searchOverpass({ city, checkin, checkout, adults }) {
   const geo = geoRes.data?.[0];
   if (!geo?.lat) throw new Error(`Ville introuvable : ${city}`);
 
-  // Overpass via URL GET avec query encodée
   const query = `[out:json][timeout:15];(node["tourism"="hotel"](around:5000,${geo.lat},${geo.lon});node["tourism"="guest_house"](around:5000,${geo.lat},${geo.lon}););out tags 15;`;
-  const ovRes = await axios.get(`https://overpass.kumi.systems/api/interpreter?data=${encodeURIComponent(query)}`, {
-    timeout: 20000,
-  });
+  const MIRRORS = [
+    "https://overpass.osm.ch/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+  ];
+  let ovRes = null;
+  for (const mirror of MIRRORS) {
+    try {
+      ovRes = await axios.get(`${mirror}?data=${encodeURIComponent(query)}`, { timeout: 15000 });
+      break;
+    } catch(e) { console.warn(`Mirror ${mirror} failed:`, e.response?.status || e.message); }
+  }
+  if (!ovRes) throw new Error("Tous les serveurs Overpass sont indisponibles, réessayez dans 1 minute.");
 
   const seen = new Set();
   return (ovRes.data?.elements || [])
