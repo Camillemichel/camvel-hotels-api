@@ -25,6 +25,12 @@ app.get("/hotels", async (req, res) => {
 
 app.get("/health", (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+app.get("/env-check", (_req, res) => res.json({
+  SERPAPI_KEY  : process.env.SERPAPI_KEY ? "✅ définie" : "❌ manquante",
+  AMADEUS_KEY  : process.env.AMADEUS_KEY ? "✅ définie" : "❌ manquante",
+  PORT         : process.env.PORT || "non défini",
+}));
+
 // Debug : teste chaque étape et retourne les erreurs détaillées
 app.get("/debug", async (req, res) => {
   const city = req.query.city || "Paris";
