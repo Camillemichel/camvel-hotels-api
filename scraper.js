@@ -11,18 +11,8 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey, ma
   const SERPAPI_KEY = apiKey || process.env.SERPAPI_KEY;
   if (!SERPAPI_KEY) throw new Error("Clé SerpApi manquante");
 
-  // Mapping type → property_types SerpApi Google Hotels
-  const PROP_TYPES = {
-    hotel     : [1],
-    hostel    : [3],
-    apartment : [5, 2],
-    house     : [11, 2],
-    villa     : [2, 11],
-  };
-
   // Plusieurs types possibles (ex: "hotel,apartment")
   const selectedTypes = (accomType || "hotel").split(",").map(t => t.trim());
-  const propertyTypeIds = [...new Set(selectedTypes.flatMap(t => PROP_TYPES[t] || [1]))];
 
   // Label texte pour la requête selon les types sélectionnés
   const TYPE_LABELS = {
@@ -32,8 +22,14 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey, ma
   const typeLabel = selectedTypes.map(t => TYPE_LABELS[t] || "hotel").join(" ");
 
   const travelPrefix = travelType === "family" ? "family" : travelType === "couple" ? "romantic" : "";
-  const reqExtra     = requests ? requests.slice(0, 60) : "";
-  const queryStr     = [travelPrefix, typeLabel, city, reqExtra].filter(Boolean).join(" ");
+  // Extrait uniquement les mots-clés courts de la note (max 2 mots utiles, sans accents lourds)
+  const reqKeywords  = requests
+    ? requests.toLowerCase()
+        .replace(/[àâä]/g,"a").replace(/[éèêë]/g,"e").replace(/[îï]/g,"i").replace(/[ôö]/g,"o").replace(/[ùûü]/g,"u")
+        .match(/\b(sea|beach|plage|mer|centre|center|pool|piscine|view|vue|quiet|calme|luxe|luxury|garden|jardin|balcon|balcony)\b/g)
+        ?.slice(0,2).join(" ") || ""
+    : "";
+  const queryStr = [travelPrefix, typeLabel, city, reqKeywords].filter(Boolean).join(" ");
 
   const params = {
     engine         : "google_hotels",
@@ -46,14 +42,13 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey, ma
     gl             : "fr",
     api_key        : SERPAPI_KEY,
   };
-  // Filtre par type d'hébergement (property_types SerpApi)
-  if (propertyTypeIds.length > 0 && !(selectedTypes.length === 1 && selectedTypes[0] === "hotel")) {
-    params.property_types = propertyTypeIds.join(",");
-  }
-  // Filtre de prix max si budget renseigné
+  // Filtre de prix max
   if (maxPrice) params.max_price = maxPrice;
-  // Filtre d'étoiles
-  if (minStars) params.hotel_class = Array.from({length: (maxStars||5) - minStars + 1}, (_,i) => minStars + i).join(",");
+  // Filtre d'étoiles : uniquement pour les hôtels ET si le filtre est réellement restrictif (pas 2-5 = tout)
+  const isHotelOnly = selectedTypes.length === 1 && selectedTypes[0] === "hotel";
+  if (isHotelOnly && minStars && maxStars && !(minStars <= 2 && maxStars >= 5)) {
+    params.hotel_class = Array.from({length: maxStars - minStars + 1}, (_,i) => minStars + i).join(",");
+  }
 
   const r = await axios.get("https://serpapi.com/search", { params, timeout: 15000 });
 
