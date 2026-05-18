@@ -50,7 +50,7 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey, ma
     params.hotel_class = Array.from({length: maxStars - minStars + 1}, (_,i) => minStars + i).join(",");
   }
 
-  const r = await axios.get("https://serpapi.com/search", { params, timeout: 15000 });
+  const r = await axios.get("https://serpapi.com/search", { params, timeout: 25000 });
 
   const results = r.data?.properties || r.data?.hotels_results || [];
 
@@ -79,35 +79,42 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey, ma
   });
 }
 
+const isTimeout = (e) => e.code === "ECONNABORTED" || e.message?.includes("timeout");
+
 async function searchHotels(params) {
   const key = `${params.city}-${params.checkin}-${params.checkout}-${params.adults}-${params.accomType}-${params.requests?.slice(0,20)}`;
   return cached(key, async () => {
+    let results = [];
+
     // 1er essai : critères complets
-    let results = await searchHotelsSerpApi(params);
-    if (results.length >= 2) return results;
-
-    // 2ème essai : sans la note spéciale
-    if (params.requests) {
-      console.log("Fallback 1: sans requests");
-      results = await searchHotelsSerpApi({ ...params, requests: "" });
-      if (results.length >= 2) return results.map(h => ({ ...h, _fallback: "Sans la demande spéciale" }));
+    try {
+      results = await searchHotelsSerpApi(params);
+      if (results.length >= 2) return results;
+    } catch(e) {
+      if (isTimeout(e)) console.warn("Timeout essai 1, fallback direct");
+      else throw e; // erreur non-timeout → remonte (400, clé invalide…)
     }
 
-    // 3ème essai : sans filtre de prix
-    if (params.maxPrice) {
-      console.log("Fallback 2: sans filtre prix");
-      results = await searchHotelsSerpApi({ ...params, requests: "", maxPrice: null });
-      if (results.length >= 2) return results.map(h => ({ ...h, _fallback: "Budget élargi" }));
+    // 2ème essai : requête simplifiée (sans demandes spéciales, sans filtres stricts)
+    try {
+      console.log("Fallback: requête simplifiée");
+      results = await searchHotelsSerpApi({
+        ...params, requests: "", maxPrice: null, minStars: null, maxStars: null, travelType: "",
+      });
+      if (results.length >= 2) return results.map(h => ({ ...h, _fallback: "Alternatives disponibles" }));
+    } catch(e) {
+      if (!isTimeout(e)) throw e;
     }
 
-    // 4ème essai : type conservé mais sans aucun autre filtre
-    console.log("Fallback 3: recherche générale");
-    results = await searchHotelsSerpApi({ ...params, requests: "", maxPrice: null, minStars: null, maxStars: null, travelType: "" });
-    if (results.length === 0) {
-      // Dernier recours : juste "hotel [ville]"
-      results = await searchHotelsSerpApi({ ...params, requests: "", maxPrice: null, minStars: null, maxStars: null, accomType: "hotel", travelType: "" });
+    // Dernier recours : "hotel [ville]" uniquement
+    try {
+      results = await searchHotelsSerpApi({
+        ...params, requests: "", maxPrice: null, minStars: null, maxStars: null, accomType: "hotel", travelType: "",
+      });
+      return results.map(h => ({ ...h, _fallback: "Alternatives disponibles dans la ville" }));
+    } catch(e) {
+      throw new Error("Aucun hôtel trouvé pour cette destination.");
     }
-    return results.map(h => ({ ...h, _fallback: "Alternatives disponibles dans la ville" }));
   });
 }
 
