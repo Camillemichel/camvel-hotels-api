@@ -1,7 +1,5 @@
 const axios = require("axios");
 
-const SERPAPI_KEY = process.env.SERPAPI_KEY;
-
 // Cache 15 min
 const cache = {};
 function cached(key, fn) {
@@ -9,8 +7,9 @@ function cached(key, fn) {
   return fn().then(d => { cache[key] = { data: d, ts: Date.now() }; return d; });
 }
 
-async function searchHotelsSerpApi({ city, checkin, checkout, adults }) {
-  if (!SERPAPI_KEY) throw new Error("SERPAPI_KEY manquante dans les variables Railway");
+async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey }) {
+  const SERPAPI_KEY = apiKey || process.env.SERPAPI_KEY;
+  if (!SERPAPI_KEY) throw new Error("Clé SerpApi manquante");
 
   const r = await axios.get("https://serpapi.com/search", {
     params: {
@@ -53,5 +52,6 @@ async function searchHotels(params) {
   const key = `${params.city}-${params.checkin}-${params.checkout}-${params.adults}`;
   return cached(key, () => searchHotelsSerpApi(params));
 }
+
 
 module.exports = { searchHotels };
