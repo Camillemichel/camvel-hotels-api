@@ -42,8 +42,7 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey }) 
       perNight: priceNum || null,
       price   : priceNum ? `${priceNum}€/nuit` : "Voir les prix",
       total   : priceNum ? priceNum * nights : null,
-      bookUrl : h.link || h.serpapi_property_details_link ||
-        `https://www.google.com/travel/hotels?q=${encodeURIComponent(h.name + " " + city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}`,
+      bookUrl : `https://www.google.com/travel/hotels?q=${encodeURIComponent(h.name + " " + city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}&hl=fr`,
     };
   });
 }
