@@ -62,4 +62,8 @@ app.get("/debug", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ API hôtels prête sur le port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ API prête sur port ${PORT}`);
+  console.log("SERPAPI_KEY:", process.env.SERPAPI_KEY ? `définie (${process.env.SERPAPI_KEY.length} chars)` : "MANQUANTE");
+  console.log("Vars dispo:", Object.keys(process.env).filter(k => !k.includes("npm") && !k.includes("PATH")).join(", "));
+});
