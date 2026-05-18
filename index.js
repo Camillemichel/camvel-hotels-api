@@ -14,6 +14,9 @@ app.get("/hotels", async (req, res) => {
     return res.status(400).json({ error: "city, checkin et checkout sont requis" });
   }
 
+  // Clé passée depuis le client si la variable Railway ne fonctionne pas
+  if (req.query.key && !process.env.SERPAPI_KEY) process.env.SERPAPI_KEY = req.query.key;
+
   try {
     const hotels = await searchHotels({ city, checkin, checkout, adults: parseInt(adults) });
     res.json({ hotels, count: hotels.length });
