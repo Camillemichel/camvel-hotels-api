@@ -1,6 +1,6 @@
 const express          = require("express");
 const cors             = require("cors");
-const { scrapeBooking } = require("./scraper");
+const { searchHotels } = require("./scraper");
 
 const app = express();
 app.use(cors());
@@ -15,10 +15,10 @@ app.get("/hotels", async (req, res) => {
   }
 
   try {
-    const hotels = await scrapeBooking({ city, checkin, checkout, adults: parseInt(adults) });
+    const hotels = await searchHotels({ city, checkin, checkout, adults: parseInt(adults) });
     res.json({ hotels, count: hotels.length });
   } catch (e) {
-    console.error("Scraping error:", e.message);
+    console.error("Search error:", e.message);
     res.status(500).json({ error: e.message });
   }
 });

@@ -1,56 +1,75 @@
-const axios   = require("axios");
-const cheerio = require("cheerio");
+const axios = require("axios");
 
-const HEADERS = {
-  "User-Agent"      : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-  "Accept-Language" : "fr-FR,fr;q=0.9,en;q=0.8",
-  "Accept"          : "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-  "Accept-Encoding" : "gzip, deflate, br",
-  "Cache-Control"   : "no-cache",
-  "Pragma"          : "no-cache",
-};
+const GOOGLE_KEY = process.env.GOOGLE_KEY;
 
-async function scrapeBooking({ city, checkin, checkout, adults = 2 }) {
-  const url = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(city)}&checkin=${checkin}&checkout=${checkout}&group_adults=${adults}&no_rooms=1&selected_currency=EUR&lang=fr`;
+// ─── Recherche via Google Places (si clé dispo) ───────────────────────────────
 
-  const { data: html } = await axios.get(url, {
-    headers : HEADERS,
-    timeout : 15000,
-    maxRedirects: 5,
+async function searchGoogle({ city, checkin, checkout, adults }) {
+  const geoRes = await axios.get("https://maps.googleapis.com/maps/api/geocode/json", {
+    params: { address: city, key: GOOGLE_KEY }, timeout: 8000,
+  });
+  const loc = geoRes.data?.results?.[0]?.geometry?.location;
+  if (!loc) throw new Error(`Ville introuvable : ${city}`);
+
+  const placesRes = await axios.get("https://maps.googleapis.com/maps/api/place/nearbysearch/json", {
+    params: { location: `${loc.lat},${loc.lng}`, radius: 5000, type: "lodging", key: GOOGLE_KEY },
+    timeout: 8000,
   });
 
-  const $       = cheerio.load(html);
-  const hotels  = [];
-  const nights  = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
-
-  $('[data-testid="property-card"]').each((_, el) => {
-    const name  = $('[data-testid="title"]',      el).first().text().trim();
-    const price = $('[data-testid="price-and-discounted-price"]', el).first().text().trim();
-    const link  = $('[data-testid="title-link"]', el).first().attr("href") ||
-                  $("a",                          el).first().attr("href");
-
-    const starsEl = $('[data-testid="rating-stars"] span, .b8b4f843d5 span', el);
-    const stars   = starsEl.length || null;
-
-    const scoreText = $('[data-testid="review-score"]', el).text().trim();
-    const score     = scoreText.match(/\d[\d,.]+/)?.[0] || null;
-
-    const distText  = $('[data-testid="distance"]', el).text().trim();
-    const roomDesc  = $('[data-testid="recommended-units"]', el).first().text().trim();
-
-    // Prix par nuit depuis le texte brut
-    const priceNum  = price.replace(/[^\d]/g, "");
-    const perNight  = priceNum && nights > 0 ? Math.round(parseInt(priceNum) / nights) : null;
-
-    // Lien direct vers la page hôtel (pas les résultats de recherche)
-    const bookUrl = link
-      ? (link.startsWith("http") ? link : `https://www.booking.com${link}`)
-      : `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(name + " " + city)}&checkin=${checkin}&checkout=${checkout}&group_adults=${adults}`;
-
-    if (name) hotels.push({ name, stars, score, perNight, price, roomDesc, distance: distText, bookUrl });
-  });
-
-  return hotels;
+  return (placesRes.data?.results || []).slice(0, 10).map(p => ({
+    name    : p.name,
+    stars   : p.rating ? Math.min(Math.round(p.rating), 5) : null,
+    score   : p.rating ? `${p.rating}/5` : null,
+    reviews : p.user_ratings_total || 0,
+    address : p.vicinity,
+    perNight: null,
+    price   : "Voir les prix",
+    bookUrl : `https://www.google.com/travel/hotels?q=${encodeURIComponent(p.name + " " + city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}`,
+  }));
 }
 
-module.exports = { scrapeBooking };
+// ─── Recherche via Nominatim + requête directe Overpass ───────────────────────
+
+async function searchOverpass({ city, checkin, checkout, adults }) {
+  // Géoloc
+  const geoRes = await axios.get("https://nominatim.openstreetmap.org/search", {
+    params : { q: city, format: "json", limit: 1 },
+    headers: { "User-Agent": "CamVelApp/1.0" },
+    timeout: 8000,
+  });
+  const geo = geoRes.data?.[0];
+  if (!geo?.lat) throw new Error(`Ville introuvable : ${city}`);
+
+  // Overpass via URL GET avec query encodée
+  const query = `[out:json][timeout:15];(node["tourism"="hotel"](around:5000,${geo.lat},${geo.lon});node["tourism"="guest_house"](around:5000,${geo.lat},${geo.lon}););out tags 15;`;
+  const ovRes = await axios.get(`https://overpass.kumi.systems/api/interpreter?data=${encodeURIComponent(query)}`, {
+    timeout: 20000,
+  });
+
+  const seen = new Set();
+  return (ovRes.data?.elements || [])
+    .filter(el => el.tags?.name && !seen.has(el.tags.name) && seen.add(el.tags.name))
+    .slice(0, 10)
+    .map(el => ({
+      name    : el.tags.name,
+      stars   : parseInt(el.tags?.stars) || null,
+      score   : null,
+      reviews : 0,
+      address : [el.tags?.["addr:street"], el.tags?.["addr:housenumber"]].filter(Boolean).join(" ") || city,
+      perNight: null,
+      price   : "Voir les prix",
+      bookUrl : el.tags?.website ||
+        `https://www.google.com/travel/hotels?q=${encodeURIComponent(el.tags.name + " " + city)}&checkin=${checkin}&checkout=${checkout}&adults=${adults}`,
+    }));
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+
+async function searchHotels(params) {
+  if (GOOGLE_KEY) {
+    try { return await searchGoogle(params); } catch (e) { console.warn("Google:", e.message); }
+  }
+  return searchOverpass(params);
+}
+
+module.exports = { searchHotels };
