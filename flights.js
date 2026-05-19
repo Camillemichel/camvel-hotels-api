@@ -119,15 +119,18 @@ function formatFlight(f, bookingToken) {
     co2Diff  : f.carbon_emissions?.difference_percent || null,
 
     // Réservation
-    // URL Google Flights avec IATA + date + passagers (format fiable)
+    // URL Google Flights avec recherche pré-remplie (IATA + date + passagers)
     bookUrl  : (() => {
-      const dep  = f.flights?.[0]?.departure_airport?.id || "";
-      const arr  = (f.flights?.[f.flights.length-1] || f.flights?.[0])?.arrival_airport?.id || "";
-      const dt   = (f.flights?.[0]?.departure_airport?.time || "").slice(0,10);
-      if (!dep || !arr) return null;
-      // Format hash Google Flights : f=ORIGIN;t=DEST;d=DATE
-      const base = `https://www.google.com/flights#search;f=${dep};t=${arr}`;
-      return dt ? `${base};d=${dt}` : base;
+      const dep = f.flights?.[0]?.departure_airport?.id || "";
+      const arr = (f.flights?.[f.flights.length-1] || f.flights?.[0])?.arrival_airport?.id || "";
+      const dt  = (f.flights?.[0]?.departure_airport?.time || "").slice(0,10);
+      const airline = f.flights?.[0]?.airline || "";
+      const flNum   = f.flights?.[0]?.flight_number || "";
+      // Format Google Flights qui pré-remplit la recherche
+      const q = [airline, flNum, dep, arr].filter(Boolean).join(" ");
+      let url = `https://www.google.com/travel/flights?hl=fr&q=${encodeURIComponent(q)}`;
+      if (dt) url += `&dates=${dt.replace(/-/g,"")}`;
+      return url;
     })(),
 
     // Classe
