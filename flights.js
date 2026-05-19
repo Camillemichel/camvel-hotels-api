@@ -131,7 +131,7 @@ function formatFlight(f, bookingToken) {
 
 // ─── Recherche de vols ────────────────────────────────────────────────────────
 
-async function searchFlights({ from, to, date, returnDate, adults = 2, currency = "EUR", lang = "fr", apiKey }) {
+async function searchFlights({ from, to, date, returnDate, adults = 2, currency = "EUR", lang = "fr", apiKey, directOnly = false }) {
   const key = apiKey || SERPAPI_KEY || process.env.SERPAPI_KEY;
   if (!key) throw new Error("SERPAPI_KEY manquante dans les variables Railway");
 
@@ -163,26 +163,32 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
   const data = r.data;
   if (data.error) throw new Error(`SerpApi: ${data.error}`);
 
-  const best  = (data.best_flights  || []).map(f => formatFlight(f, f.booking_token)).filter(f => f.price);
-  const other = (data.other_flights || []).map(f => formatFlight(f, f.booking_token)).filter(f => f.price);
-
-  // Vols retour (si aller-retour)
-  const returnFlights = isRoundTrip
+  let best  = (data.best_flights  || []).map(f => formatFlight(f, f.booking_token)).filter(f => f.price);
+  let other = (data.other_flights || []).map(f => formatFlight(f, f.booking_token)).filter(f => f.price);
+  let returnF = isRoundTrip
     ? (data.returning_flights || []).map(f => formatFlight(f, f.booking_token)).filter(f => f.price)
     : [];
+
+  // Filtre direct uniquement si demandé
+  if (directOnly) {
+    best    = best.filter(f => f.stops === 0);
+    other   = other.filter(f => f.stops === 0);
+    returnF = returnF.filter(f => f.stops === 0);
+  }
+
+  // Tri par prix croissant
+  const byPrice = (a, b) => (a.price||9999) - (b.price||9999);
+  const flights      = [...best, ...other].sort(byPrice).slice(0, 12);
+  const returnFlights = returnF.sort(byPrice).slice(0, 10);
 
   return {
     from        : { iata: depId, query: from },
     to          : { iata: destId, query: to },
-    date,
-    returnDate  : returnDate || null,
-    adults      : parseInt(adults) || 2,
-    currency    : currency || "EUR",
-    isRoundTrip,
-    flights     : [...best, ...other].slice(0, 12),
-    returnFlights : returnFlights.slice(0, 8),
-    priceInsights : data.price_insights || null,
-    count       : best.length + other.length,
+    date, returnDate: returnDate || null,
+    adults: parseInt(adults) || 2, currency: currency || "EUR", isRoundTrip,
+    flights, returnFlights,
+    priceInsights: data.price_insights || null,
+    count: flights.length,
   };
 }
 
@@ -210,7 +216,7 @@ async function searchAirports(query) {
  * Exemple: /flights/search?from=Paris&to=Londres&date=2026-06-10&return_date=2026-06-15&adults=2
  */
 router.get("/search", async (req, res) => {
-  const { from, to, date, return_date, adults = 2, currency = "EUR", lang = "fr", key } = req.query;
+  const { from, to, date, return_date, adults = 2, currency = "EUR", lang = "fr", key, direct = "false" } = req.query;
 
   if (!from || !to || !date) {
     return res.status(400).json({ error: "Paramètres requis : from, to, date" });
@@ -224,6 +230,7 @@ router.get("/search", async (req, res) => {
     const cacheKey = `${from}-${to}-${date}-${return_date||""}-${adults}`;
     const result = await cached(cacheKey, () => searchFlights({
       from, to, date, returnDate: return_date, adults, currency, lang, apiKey,
+      directOnly: direct === "true",
     }));
     res.json(result);
   } catch (e) {
