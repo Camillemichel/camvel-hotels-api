@@ -119,9 +119,16 @@ function formatFlight(f, bookingToken) {
     co2Diff  : f.carbon_emissions?.difference_percent || null,
 
     // Réservation
-    bookUrl  : bookingToken
-      ? `https://www.google.com/travel/flights?tfs=${encodeURIComponent(bookingToken)}`
-      : null,
+    // URL Google Flights avec IATA + date + passagers (format fiable)
+    bookUrl  : (() => {
+      const dep  = f.flights?.[0]?.departure_airport?.id || "";
+      const arr  = (f.flights?.[f.flights.length-1] || f.flights?.[0])?.arrival_airport?.id || "";
+      const dt   = (f.flights?.[0]?.departure_airport?.time || "").slice(0,10);
+      if (!dep || !arr) return null;
+      // Format hash Google Flights : f=ORIGIN;t=DEST;d=DATE
+      const base = `https://www.google.com/flights#search;f=${dep};t=${arr}`;
+      return dt ? `${base};d=${dt}` : base;
+    })(),
 
     // Classe
     travelClass: first.travel_class || "Economy",
