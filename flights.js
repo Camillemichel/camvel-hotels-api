@@ -119,12 +119,19 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
     currency      : currency || "EUR",
     hl            : lang === "fr" ? "fr" : lang === "es" ? "es" : lang === "de" ? "de" : "en",
     api_key       : key,
-    type          : isRoundTrip ? "1" : "2",   // 1 = aller-retour, 2 = aller simple
     ...(isRoundTrip ? { return_date: returnDate } : {}),
   };
 
-  const r = await axios.get("https://serpapi.com/search", { params, timeout: 25000 });
+  console.log("Flight search params:", JSON.stringify({ departure_id:depId, arrival_id:destId, outbound_date:date, type:params.type, adults:params.adults }));
+  let r;
+  try {
+    r = await axios.get("https://serpapi.com/search", { params, timeout: 25000 });
+  } catch(e) {
+    const serpErr = e.response?.data?.error || e.response?.data?.message || e.message;
+    throw new Error(`SerpApi vols: ${serpErr}`);
+  }
   const data = r.data;
+  if (data.error) throw new Error(`SerpApi: ${data.error}`);
 
   const best  = (data.best_flights  || []).map(f => formatFlight(f, f.booking_token)).filter(f => f.price);
   const other = (data.other_flights || []).map(f => formatFlight(f, f.booking_token)).filter(f => f.price);
