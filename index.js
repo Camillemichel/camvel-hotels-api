@@ -1,10 +1,16 @@
 const express          = require("express");
 const cors             = require("cors");
 const { searchHotels } = require("./scraper");
+const flightsRouter    = require("./flights");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Timeout serveur : 60s pour laisser SerpApi répondre + fallbacks
+app.use((req, res, next) => { res.setTimeout(60000); next(); });
+
+// Routes vols
+app.use("/flights", flightsRouter);
 
 // GET /hotels?city=Paris&checkin=2026-06-10&checkout=2026-06-15&adults=2
 app.get("/hotels", async (req, res) => {
