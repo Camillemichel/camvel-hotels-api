@@ -42,13 +42,8 @@ async function searchHotelsSerpApi({ city, checkin, checkout, adults, apiKey, ma
     gl             : "fr",
     api_key        : SERPAPI_KEY,
   };
-  // Filtre de prix max
-  if (maxPrice) params.max_price = maxPrice;
-  // Filtre d'étoiles : uniquement pour les hôtels ET si le filtre est réellement restrictif (pas 2-5 = tout)
-  const isHotelOnly = selectedTypes.length === 1 && selectedTypes[0] === "hotel";
-  if (isHotelOnly && minStars && maxStars && !(minStars <= 2 && maxStars >= 5)) {
-    params.hotel_class = Array.from({length: maxStars - minStars + 1}, (_,i) => minStars + i).join(",");
-  }
+  // Filtre de prix max (uniquement si valeur raisonnable > 10€)
+  if (maxPrice && maxPrice > 10) params.max_price = maxPrice;
 
   const r = await axios.get("https://serpapi.com/search", { params, timeout: 25000 });
 
