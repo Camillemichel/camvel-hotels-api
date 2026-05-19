@@ -26,29 +26,58 @@ const KNOWN_AIRPORTS = {
   // France
   "paris":"CDG","paris cdg":"CDG","roissy":"CDG","paris orly":"ORY","orly":"ORY",
   "lyon":"LYS","marseille":"MRS","nice":"NCE","toulouse":"TLS","bordeaux":"BOD",
-  "nantes":"NTE","montpellier":"MPL","lille":"LIL","strasbourg":"SXB",
-  // Europe
-  "londre":"LHR","london":"LHR","heathrow":"LHR","gatwick":"LGW","stansted":"STN",
-  "amsterdam":"AMS","bruxelles":"BRU","brussels":"BRU","madrid":"MAD","barcelone":"BCN",
-  "barcelona":"BCN","rome":"FCO","roma":"FCO","milan":"MXP","milano":"MXP",
-  "berlin":"BER","munich":"MUC","münchen":"MUC","vienne":"VIE","vienna":"VIE",
-  "lisbonne":"LIS","lisbon":"LIS","porto":"OPO","athenes":"ATH","athens":"ATH",
-  "istanbul":"IST","varsovie":"WAW","warsaw":"WAW","prague":"PRG","budapest":"BUD",
-  // Monde
-  "new york":"JFK","nyc":"JFK","los angeles":"LAX","miami":"MIA","chicago":"ORD",
-  "toronto":"YYZ","montréal":"YUL","montreal":"YUL","mexico":"MEX",
-  "dubai":"DXB","abu dhabi":"AUH","doha":"DOH",
-  "bangkok":"BKK","tokyo":"NRT","osaka":"KIX","singapour":"SIN","singapore":"SIN",
-  "hong kong":"HKG","pékin":"PEK","beijing":"PEK","shanghai":"PVG",
-  "sydney":"SYD","melbourne":"MEL",
-  "marrakech":"RAK","casablanca":"CMN","tunis":"TUN","alger":"ALG","dakar":"DSS",
-  "nairobi":"NBO","johannesburg":"JNB","le caire":"CAI","cairo":"CAI",
+  "nantes":"NTE","montpellier":"MPL","lille":"LIL","strasbourg":"SXB","rennes":"RNS",
+  // UK — noms français ET anglais
+  "londres":"LHR","london":"LHR","londre":"LHR","heathrow":"LHR","gatwick":"LGW","stansted":"STN","luton":"LTN",
+  "manchester":"MAN","edinburgh":"EDI","birmingham":"BHX","glasgow":"GLA",
+  // Europe — noms français
+  "amsterdam":"AMS","bruxelles":"BRU","brussels":"BRU",
+  "madrid":"MAD","barcelone":"BCN","barcelona":"BCN","seville":"SVQ","valence":"VLC",
+  "rome":"FCO","roma":"FCO","milan":"MXP","milano":"MXP","venise":"VCE","naples":"NAP",
+  "berlin":"BER","munich":"MUC","munchen":"MUC","francfort":"FRA","frankfurt":"FRA","hambourg":"HAM","hamburg":"HAM","cologne":"CGN","dusseldorf":"DUS",
+  "vienne":"VIE","vienna":"VIE","salzbourg":"SZG","innsbruck":"INN",
+  "lisbonne":"LIS","lisbon":"LIS","porto":"OPO","faro":"FAO",
+  "athenes":"ATH","athens":"ATH","thessalonique":"SKG",
+  "istanbul":"IST","ankara":"ESB",
+  "varsovie":"WAW","warsaw":"WAW","cracovie":"KRK","prague":"PRG","budapest":"BUD",
+  "stockholm":"ARN","oslo":"OSL","copenhague":"CPH","copenhagen":"CPH","helsinki":"HEL",
+  "geneve":"GVA","genf":"GVA","zurich":"ZRH","bale":"BSL","berne":"BRN",
+  "dubrovnik":"DBV","split":"SPU","zagreb":"ZAG","belgrade":"BEG","bucarest":"OTP",
+  "sofia":"SOF","riga":"RIX","vilnius":"VNO","tallinn":"TLL",
+  "reykjavik":"KEF","dublin":"DUB","malte":"MLA","chypre":"LCA","nicosie":"LCA",
+  // Monde — noms français
+  "new york":"JFK","new-york":"JFK","nyc":"JFK","los angeles":"LAX","la":"LAX",
+  "miami":"MIA","chicago":"ORD","san francisco":"SFO","boston":"BOS","washington":"IAD",
+  "las vegas":"LAS","seattle":"SEA","atlanta":"ATL","houston":"IAH","dallas":"DFW",
+  "toronto":"YYZ","montreal":"YUL","montréal":"YUL","vancouver":"YVR","calgary":"YYC",
+  "mexico":"MEX","mexico city":"MEX","cancun":"CUN","bogota":"BOG","lima":"LIM",
+  "buenos aires":"EZE","sao paulo":"GRU","rio de janeiro":"GIG","rio":"GIG","santiago":"SCL",
+  "dubai":"DXB","abu dhabi":"AUH","doha":"DOH","riyad":"RUH","koweït":"KWI","beyrouth":"BEY",
+  "tel aviv":"TLV","amman":"AMM","le caire":"CAI","cairo":"CAI","tunis":"TUN",
+  "casablanca":"CMN","marrakech":"RAK","agadir":"AGA","alger":"ALG","oran":"ORN",
+  "dakar":"DSS","abidjan":"ABJ","accra":"ACC","lagos":"LOS","nairobi":"NBO",
+  "johannesburg":"JNB","cape town":"CPT","le cap":"CPT","addis abeba":"ADD",
+  "bangkok":"BKK","singapour":"SIN","singapore":"SIN","kuala lumpur":"KUL","jakarta":"CGK",
+  "bali":"DPS","manille":"MNL","manila":"MNL","hanoi":"HAN","ho chi minh":"SGN",
+  "tokyo":"NRT","osaka":"KIX","seoul":"ICN","séoul":"ICN","pekin":"PEK","beijing":"PEK",
+  "pékin":"PEK","shanghai":"PVG","hong kong":"HKG","taipei":"TPE",
+  "mumbai":"BOM","delhi":"DEL","new delhi":"DEL","bangalore":"BLR","chennai":"MAA",
+  "sydney":"SYD","melbourne":"MEL","brisbane":"BNE","perth":"PER","auckland":"AKL",
 };
 
 function cityToIATA(city) {
   if (!city) return null;
-  const key = city.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  return KNOWN_AIRPORTS[key] || city.toUpperCase().trim();
+  // Normalise : enlève accents, minuscules, trim
+  const norm = city.trim().toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[''`]/g, "");
+  // Cherche dans le mapping
+  if (KNOWN_AIRPORTS[norm]) return KNOWN_AIRPORTS[norm];
+  // Si c'est déjà un code IATA 3 lettres → retourne tel quel
+  if (/^[A-Z]{3}$/.test(city.trim().toUpperCase())) return city.trim().toUpperCase();
+  // Dernier recours : 3 premières lettres en majuscule (risque d'erreur, mais évite le crash)
+  const code = city.trim().toUpperCase().replace(/[^A-Z]/g,"").slice(0,3);
+  return code.length === 3 ? code : city.trim().toUpperCase().slice(0,3);
 }
 
 // ─── Formatage du résultat SerpApi → structure propre ────────────────────────
