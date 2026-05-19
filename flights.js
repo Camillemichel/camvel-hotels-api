@@ -137,7 +137,9 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
 
   const depId  = cityToIATA(from);
   const destId = cityToIATA(to);
-  const isRoundTrip = !!returnDate;
+  // Sécurité : retour doit être après l'aller
+  const validReturn = returnDate && returnDate > date ? returnDate : null;
+  const isRoundTrip = !!validReturn;
 
   const params = {
     engine        : "google_flights",
@@ -148,8 +150,8 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
     currency      : currency || "EUR",
     hl            : lang === "fr" ? "fr" : lang === "es" ? "es" : lang === "de" ? "de" : "en",
     api_key       : key,
-    type          : isRoundTrip ? "1" : "2",   // 1=aller-retour (nécessite return_date), 2=aller simple
-    ...(isRoundTrip ? { return_date: returnDate } : {}),
+    type          : isRoundTrip ? "1" : "2",
+    ...(isRoundTrip ? { return_date: validReturn } : {}),
   };
 
   console.log("Flight search params:", JSON.stringify({ departure_id:depId, arrival_id:destId, outbound_date:date, type:params.type, adults:params.adults }));
