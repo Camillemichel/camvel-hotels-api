@@ -102,8 +102,9 @@ function formatFlight(f, bookingToken) {
 
 // ─── Recherche de vols ────────────────────────────────────────────────────────
 
-async function searchFlights({ from, to, date, returnDate, adults = 2, currency = "EUR", lang = "fr" }) {
-  if (!SERPAPI_KEY) throw new Error("SERPAPI_KEY manquante dans les variables Railway");
+async function searchFlights({ from, to, date, returnDate, adults = 2, currency = "EUR", lang = "fr", apiKey }) {
+  const key = apiKey || SERPAPI_KEY || process.env.SERPAPI_KEY;
+  if (!key) throw new Error("SERPAPI_KEY manquante dans les variables Railway");
 
   const depId  = cityToIATA(from);
   const destId = cityToIATA(to);
@@ -117,7 +118,7 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
     adults        : parseInt(adults) || 2,
     currency      : currency || "EUR",
     hl            : lang === "fr" ? "fr" : lang === "es" ? "es" : lang === "de" ? "de" : "en",
-    api_key       : SERPAPI_KEY,
+    api_key       : key,
     type          : isRoundTrip ? "1" : "2",   // 1 = aller-retour, 2 = aller simple
     ...(isRoundTrip ? { return_date: returnDate } : {}),
   };
@@ -152,7 +153,7 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
 
 async function searchAirports(query) {
   const r = await axios.get("https://serpapi.com/search", {
-    params: { engine: "google_flights_airports", q: query, api_key: SERPAPI_KEY },
+    params: { engine: "google_flights_airports", q: query, api_key: SERPAPI_KEY || process.env.SERPAPI_KEY },
     timeout: 10000,
   });
   return (r.data?.airports || []).slice(0, 6).map(a => ({
@@ -182,9 +183,10 @@ router.get("/search", async (req, res) => {
   if (key && !process.env.SERPAPI_KEY) process.env.SERPAPI_KEY = key;
 
   try {
+    const apiKey   = key || process.env.SERPAPI_KEY || "";
     const cacheKey = `${from}-${to}-${date}-${return_date||""}-${adults}`;
     const result = await cached(cacheKey, () => searchFlights({
-      from, to, date, returnDate: return_date, adults, currency, lang,
+      from, to, date, returnDate: return_date, adults, currency, lang, apiKey,
     }));
     res.json(result);
   } catch (e) {
