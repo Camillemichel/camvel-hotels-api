@@ -148,6 +148,7 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
     currency      : currency || "EUR",
     hl            : lang === "fr" ? "fr" : lang === "es" ? "es" : lang === "de" ? "de" : "en",
     api_key       : key,
+    type          : isRoundTrip ? "1" : "2",   // 1=aller-retour (nécessite return_date), 2=aller simple
     ...(isRoundTrip ? { return_date: returnDate } : {}),
   };
 
