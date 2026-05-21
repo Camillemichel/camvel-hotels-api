@@ -11,6 +11,43 @@ const router  = express.Router();
 
 const DUFFEL_BASE = "https://api.duffel.com";
 
+// Résolution ville → code IATA aéroport
+const CITY_TO_IATA = {
+  "paris":"CDG","paris cdg":"CDG","roissy":"CDG","paris orly":"ORY","orly":"ORY",
+  "lyon":"LYS","marseille":"MRS","nice":"NCE","toulouse":"TLS","bordeaux":"BOD",
+  "nantes":"NTE","montpellier":"MPL","lille":"LIL","strasbourg":"SXB","rennes":"RNS",
+  "londres":"LHR","london":"LHR","londre":"LHR","heathrow":"LHR","gatwick":"LGW","stansted":"STN",
+  "manchester":"MAN","edinburgh":"EDI","birmingham":"BHX","glasgow":"GLA",
+  "amsterdam":"AMS","bruxelles":"BRU","brussels":"BRU",
+  "madrid":"MAD","barcelone":"BCN","barcelona":"BCN","seville":"SVQ","valence":"VLC",
+  "rome":"FCO","milan":"MXP","venise":"VCE","naples":"NAP",
+  "berlin":"BER","munich":"MUC","munchen":"MUC","francfort":"FRA","frankfurt":"FRA",
+  "hambourg":"HAM","hamburg":"HAM","cologne":"CGN","dusseldorf":"DUS",
+  "vienne":"VIE","vienna":"VIE","lisbonne":"LIS","lisbon":"LIS","porto":"OPO",
+  "athenes":"ATH","athens":"ATH","istanbul":"IST","prague":"PRG","budapest":"BUD",
+  "stockholm":"ARN","oslo":"OSL","copenhague":"CPH","copenhagen":"CPH","helsinki":"HEL",
+  "geneve":"GVA","zurich":"ZRH","dubrovnik":"DBV","varsovie":"WAW","warsaw":"WAW",
+  "new york":"JFK","new-york":"JFK","nyc":"JFK","los angeles":"LAX",
+  "miami":"MIA","chicago":"ORD","san francisco":"SFO","boston":"BOS",
+  "toronto":"YYZ","montreal":"YUL","montréal":"YUL","vancouver":"YVR",
+  "dubai":"DXB","doha":"DOH","abu dhabi":"AUH",
+  "bangkok":"BKK","singapour":"SIN","singapore":"SIN","tokyo":"NRT","osaka":"KIX",
+  "seoul":"ICN","séoul":"ICN","pekin":"PEK","beijing":"PEK","shanghai":"PVG",
+  "hong kong":"HKG","mumbai":"BOM","delhi":"DEL","sydney":"SYD","melbourne":"MEL",
+  "casablanca":"CMN","marrakech":"RAK","tunis":"TUN","alger":"ALG",
+  "le caire":"CAI","cairo":"CAI","nairobi":"NBO","johannesburg":"JNB",
+};
+
+function toIATA(input) {
+  if (!input) return input;
+  const t = input.trim();
+  // Déjà un code IATA 3 lettres → retourner tel quel
+  if (/^[A-Z]{3}$/.test(t)) return t;
+  // Recherche dans le mapping (insensible casse + sans accents)
+  const key = t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  return CITY_TO_IATA[key] || t.toUpperCase().slice(0,3);
+}
+
 function duffelHeaders(key) {
   return {
     "Authorization" : `Bearer ${key.trim()}`,
@@ -106,10 +143,14 @@ async function searchDuffel({ from, to, date, returnDate, adults=2, children=0, 
 
   const headers = duffelHeaders(key);
 
+  // Résolution ville → IATA
+  const depIATA = toIATA(from);
+  const arrIATA = toIATA(to);
+
   // Slices : aller (+ retour si aller-retour)
-  const slices = [{ origin: from, destination: to, departure_date: date }];
+  const slices = [{ origin: depIATA, destination: arrIATA, departure_date: date }];
   if (returnDate && returnDate > date) {
-    slices.push({ origin: to, destination: from, departure_date: returnDate });
+    slices.push({ origin: arrIATA, destination: depIATA, departure_date: returnDate });
   }
 
   // Passagers
