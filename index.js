@@ -2,6 +2,7 @@ const express          = require("express");
 const cors             = require("cors");
 const { searchHotels } = require("./scraper");
 const flightsRouter    = require("./flights");
+const duffelRouter     = require("./duffel");
 
 const app = express();
 app.use(cors());
@@ -11,6 +12,7 @@ app.use((req, res, next) => { res.setTimeout(60000); next(); });
 
 // Routes vols
 app.use("/flights", flightsRouter);
+app.use("/flights/duffel", duffelRouter);
 
 // GET /hotels?city=Paris&checkin=2026-06-10&checkout=2026-06-15&adults=2
 app.get("/hotels", async (req, res) => {
