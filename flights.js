@@ -16,7 +16,7 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY;
 
 // ─── Cache mémoire 10 min ─────────────────────────────────────────────────────
 const cache = {};
-function cached(key, fn, ttl = 10 * 60 * 1000) {
+function cached(key, fn, ttl = 2 * 60 * 1000) { // 2 min pour les vols (prix en temps réel)
   if (cache[key] && Date.now() - cache[key].ts < ttl) return Promise.resolve(cache[key].data);
   return fn().then(d => { cache[key] = { data: d, ts: Date.now() }; return d; });
 }
@@ -119,18 +119,17 @@ function formatFlight(f, bookingToken) {
     co2Diff  : f.carbon_emissions?.difference_percent || null,
 
     // Réservation
-    // URL Google Flights avec recherche pré-remplie (IATA + date + passagers)
+    // URL Google Flights : query naturelle avec IATA + date + compagnie
     bookUrl  : (() => {
-      const dep = f.flights?.[0]?.departure_airport?.id || "";
-      const arr = (f.flights?.[f.flights.length-1] || f.flights?.[0])?.arrival_airport?.id || "";
-      const dt  = (f.flights?.[0]?.departure_airport?.time || "").slice(0,10);
+      const dep     = f.flights?.[0]?.departure_airport?.id || "";
+      const arr     = (f.flights?.[f.flights.length-1] || f.flights?.[0])?.arrival_airport?.id || "";
+      const dt      = (f.flights?.[0]?.departure_airport?.time || "").slice(0,10);
       const airline = f.flights?.[0]?.airline || "";
       const flNum   = f.flights?.[0]?.flight_number || "";
-      // Format Google Flights qui pré-remplit la recherche
-      const q = [airline, flNum, dep, arr].filter(Boolean).join(" ");
-      let url = `https://www.google.com/travel/flights?hl=fr&q=${encodeURIComponent(q)}`;
-      if (dt) url += `&dates=${dt.replace(/-/g,"")}`;
-      return url;
+      const q = ["vols", dep, arr, dt, airline, flNum].filter(Boolean).join(" ");
+      const params = new URLSearchParams({ hl:"fr", q });
+      if (dt) params.set("dates", dt.replace(/-/g,""));
+      return `https://www.google.com/travel/flights?${params}`;
     })(),
 
     // Classe
@@ -190,8 +189,8 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
 
   // Tri par prix croissant
   const byPrice = (a, b) => (a.price||9999) - (b.price||9999);
-  const flights      = [...best, ...other].sort(byPrice).slice(0, 12);
-  const returnFlights = returnF.sort(byPrice).slice(0, 10);
+  const flights      = [...best, ...other].sort(byPrice).slice(0, 20);
+  const returnFlights = returnF.sort(byPrice).slice(0, 20);
 
   return {
     from        : { iata: depId, query: from },
