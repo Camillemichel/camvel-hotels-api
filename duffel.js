@@ -167,16 +167,46 @@ async function searchDuffel({ from, to, date, returnDate, adults=2, children=0, 
   // 2. Récupérer les offres triées par prix
   const qp = new URLSearchParams({
     offer_request_id : offerRequestId,
-    limit            : "30",
+    limit            : "50",   // on en demande plus pour filtrer ensuite
     sort             : "total_amount",
   });
   if (directOnly) qp.set("max_connections", "0");
 
   const offersRes = await axios.get(`${DUFFEL_BASE}/air/offers?${qp}`, { headers, timeout:30000 });
-  const offers    = offersRes.data?.data || [];
+  const rawOffers = offersRes.data?.data || [];
 
   const totalAdults = parseInt(adults||2) + parseInt(children||0);
-  return offers.map(o => formatOffer(o, totalAdults));
+  const formatted  = rawOffers.map(o => formatOffer(o, totalAdults)).filter(o => o.price > 0);
+
+  if (formatted.length === 0) return [];
+
+  // Garder uniquement les vols compétitifs :
+  // – 1 direct le moins cher par compagnie (max 3 compagnies)
+  // – 1 avec escale le moins cher par compagnie (max 3 compagnies)
+  // – tout vol dans les +30% du prix minimum absolu
+  const minPrice = formatted[0].price; // déjà trié par prix
+  const ceiling  = Math.round(minPrice * 1.35);
+
+  const seenDirect  = new Map(); // airline → offer
+  const seenStop    = new Map();
+
+  for (const o of formatted) {
+    if (o.price > ceiling) break; // au-delà du plafond : stop (trié par prix)
+    if (o.stops === 0) {
+      if (!seenDirect.has(o.airline)) seenDirect.set(o.airline, o);
+    } else {
+      if (!seenStop.has(o.airline))   seenStop.set(o.airline, o);
+    }
+    // 4 directs max + 4 avec escale max
+    if (seenDirect.size >= 4 && seenStop.size >= 4) break;
+  }
+
+  // Fusionne : directs d'abord, puis avec escale, triés par prix
+  const best = [...seenDirect.values(), ...seenStop.values()]
+    .sort((a, b) => a.price - b.price)
+    .slice(0, 10);
+
+  return best;
 }
 
 // ─── Route ────────────────────────────────────────────────────────────────────
