@@ -138,8 +138,8 @@ function formatOffer(offer, adults) {
 
 // ─── Recherche de vols ────────────────────────────────────────────────────────
 async function searchDuffel({ from, to, date, returnDate, adults=2, children=0, directOnly=false, apiKey }) {
-  const key = (apiKey || process.env.DUFFEL_KEY || "").trim();
-  if (!key) throw new Error("DUFFEL_KEY manquante");
+  const key = (apiKey || process.env.FLIGHT_CAM || "").trim();
+  if (!key) throw new Error("FLIGHT_CAM manquante");
 
   const headers = duffelHeaders(key);
 
@@ -187,8 +187,8 @@ router.get("/search", async (req, res) => {
     return res.status(400).json({ error: "Paramètres requis : from, to, date" });
   }
 
-  const apiKey = (key || process.env.DUFFEL_KEY || "").trim();
-  if (!apiKey) return res.status(400).json({ error: "DUFFEL_KEY manquante" });
+  const apiKey = (key || process.env.FLIGHT_CAM || "").trim();
+  if (!apiKey) return res.status(400).json({ error: "FLIGHT_CAM manquante" });
 
   try {
     const flights = await searchDuffel({
