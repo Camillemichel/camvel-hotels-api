@@ -63,21 +63,66 @@ const KNOWN_AIRPORTS = {
   "pékin":"PEK","shanghai":"PVG","hong kong":"HKG","taipei":"TPE",
   "mumbai":"BOM","delhi":"DEL","new delhi":"DEL","bangalore":"BLR","chennai":"MAA",
   "sydney":"SYD","melbourne":"MEL","brisbane":"BNE","perth":"PER","auckland":"AKL",
+  // DOM-TOM français (territoires d'outre-mer)
+  "guadeloupe":"PTP","pointe-a-pitre":"PTP","pointe a pitre":"PTP",
+  "martinique":"FDF","fort-de-france":"FDF","fort de france":"FDF",
+  "reunion":"RUN","la reunion":"RUN","ile de la reunion":"RUN","saint-denis":"RUN",
+  "mayotte":"DZA","dzaoudzi":"DZA","mamoudzou":"DZA",
+  "guyane":"CAY","guyane francaise":"CAY","cayenne":"CAY",
+  "nouvelle-caledonie":"NOU","nouvelle caledonie":"NOU","noumea":"NOU","nouméa":"NOU",
+  "polynesie":"PPT","polynesie francaise":"PPT","tahiti":"PPT","papeete":"PPT",
+  "saint-martin":"SXM","saint martin":"SXM","saint-barthelemy":"SBH","saint barthelemy":"SBH",
+  // Corse
+  "corse":"AJA","corsica":"AJA","ajaccio":"AJA","bastia":"BIA","calvi":"CLY",
+  // Îles méditerranéennes
+  "ibiza":"IBZ","mallorca":"PMI","majorque":"PMI","minorque":"MAH","menorca":"MAH",
+  "sicile":"CTA","sicily":"CTA","catane":"CTA","palerme":"PMO","palermo":"PMO",
+  "sardaigne":"CAG","sardinia":"CAG","cagliari":"CAG","olbia":"OLB",
+  "crete":"HER","crète":"HER","heraklion":"HER","chania":"CHQ","la canee":"CHQ",
+  "rhodes":"RHO","santorin":"JTR","santorini":"JTR","mykonos":"JMK",
+  "corfou":"CFU","corfu":"CFU","zakynthos":"ZTH","zante":"ZTH","kos":"KGS",
+  // Îles Atlantique / Canaries
+  "tenerife":"TFS","teneriffe":"TFS","gran canaria":"LPA","lanzarote":"ACE",
+  "fuerteventura":"FUE","la palma":"SPC","madere":"FNC","madeira":"FNC","funchal":"FNC",
+  "acores":"PDL","azores":"PDL","ponta delgada":"PDL","terceira":"TER",
+  // Caraïbes
+  "cuba":"HAV","la havane":"HAV","havana":"HAV","republique dominicaine":"SDQ","punta cana":"PUJ",
+  "jamaique":"KIN","kingston":"KIN","montego bay":"MBJ",
+  "barbade":"BGI","barbados":"BGI","trinidad":"POS","saint-lucie":"SLU","sainte-lucie":"SLU",
+  "bahamas":"NAS","nassau":"NAS","aruba":"AUA","curacao":"CUR",
+  // Océan Indien
+  "maldives":"MLE","male":"MLE","seychelles":"SEZ","mahe":"SEZ",
+  "maurice":"MRU","ile maurice":"MRU","mauritius":"MRU",
+  "madagascar":"TNR","antananarivo":"TNR",
+  // Asie / Pacifique insulaire
+  "bora bora":"BOB","moorea":"MOZ",
+  "phuket":"HKT","koh samui":"USM","krabi":"KBV",
+  "lombok":"LOP",
+  "sri lanka":"CMB","colombo":"CMB",
+  "okinawa":"OKA","jeju":"CJU",
 };
+
+function normalizeCity(city) {
+  return (city || "").trim().toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[''`]/g, "")
+    .replace(/\s+/g, " ");
+}
 
 function cityToIATA(city) {
   if (!city) return null;
-  // Normalise : enlève accents, minuscules, trim
-  const norm = city.trim().toLowerCase()
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .replace(/[''`]/g, "");
-  // Cherche dans le mapping
-  if (KNOWN_AIRPORTS[norm]) return KNOWN_AIRPORTS[norm];
   // Si c'est déjà un code IATA 3 lettres → retourne tel quel
-  if (/^[A-Z]{3}$/.test(city.trim().toUpperCase())) return city.trim().toUpperCase();
-  // Dernier recours : 3 premières lettres en majuscule (risque d'erreur, mais évite le crash)
-  const code = city.trim().toUpperCase().replace(/[^A-Z]/g,"").slice(0,3);
-  return code.length === 3 ? code : city.trim().toUpperCase().slice(0,3);
+  if (/^[A-Z]{3}$/.test(city.trim())) return city.trim();
+  const norm = normalizeCity(city);
+  // Correspondance exacte
+  if (KNOWN_AIRPORTS[norm]) return KNOWN_AIRPORTS[norm];
+  // Correspondance partielle : "île de la Réunion" contient "reunion"
+  for (const [key, code] of Object.entries(KNOWN_AIRPORTS)) {
+    if (norm.includes(key) || key.includes(norm)) return code;
+  }
+  // Dernier recours : 3 premières lettres alphabétiques
+  const code = city.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  return code.length === 3 ? code : null;
 }
 
 // ─── Formatage du résultat SerpApi → structure propre ────────────────────────
@@ -146,6 +191,8 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
 
   const depId  = cityToIATA(from);
   const destId = cityToIATA(to);
+  if (!depId)  throw new Error(`Aéroport introuvable pour "${from}". Essayez un nom de ville ou un code IATA (ex: CDG, RUN, PTP).`);
+  if (!destId) throw new Error(`Aéroport introuvable pour "${to}". Essayez un nom de ville ou un code IATA (ex: CDG, RUN, PTP).`);
   // Sécurité : retour doit être après l'aller
   const validReturn = returnDate && returnDate > date ? returnDate : null;
   const isRoundTrip = !!validReturn;
@@ -187,10 +234,13 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
     returnF = returnF.filter(f => f.stops === 0);
   }
 
-  // Tri par prix croissant
+  // SerpApi retourne le prix total (tous passagers) → ramener au prix par personne
+  const pax = Math.max(1, parseInt(adults||2));
+  const perPax = arr => arr.map(f => ({ ...f, totalPrice: f.price, price: Math.round((f.price||0) / pax) }));
+
   const byPrice = (a, b) => (a.price||9999) - (b.price||9999);
-  const flights      = [...best, ...other].sort(byPrice).slice(0, 20);
-  const returnFlights = returnF.sort(byPrice).slice(0, 20);
+  const flights      = perPax([...best, ...other].sort(byPrice).slice(0, 20));
+  const returnFlights = perPax(returnF.sort(byPrice).slice(0, 20));
 
   return {
     from        : { iata: depId, query: from },
