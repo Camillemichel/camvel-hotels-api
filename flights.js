@@ -202,11 +202,12 @@ async function searchFlights({ from, to, date, returnDate, adults = 2, currency 
     departure_id  : depId,
     arrival_id    : destId,
     outbound_date : date,
-    adults        : parseInt(adults) || 2,
+    adults        : parseInt(adults) || 1,
     currency      : currency || "EUR",
     hl            : lang === "fr" ? "fr" : lang === "es" ? "es" : lang === "de" ? "de" : "en",
     api_key       : key,
     type          : isRoundTrip ? "1" : "2",
+    show_hidden   : true,   // inclut les vols masqués (souvent moins chers)
     ...(isRoundTrip ? { return_date: validReturn } : {}),
   };
 
